@@ -1,25 +1,36 @@
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import Upload from "./pages/Upload";
 import Ask from "./pages/Ask";
+import Logout from "./components/Logout";
+import PrivateRoute from "./components/PrivateRoute";
+import Signup from "./pages/Signup";
 
-function App() {
+export default function App() {
   return (
-    <Router>
-      <nav style={{ margin: "1rem" }}>
-        <Link to="/">Login</Link> | <Link to="/signup">Signup</Link> |{" "}
-        <Link to="/upload">Upload</Link> | <Link to="/ask">Ask</Link>
-      </nav>
-
+    <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/ask" element={<Ask />} />
+        <Route
+          path="/upload"
+          element={
+            <PrivateRoute>
+              <Upload />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/ask"
+          element={
+            <PrivateRoute>
+              <Ask />
+            </PrivateRoute>
+          }
+        />
+        <Route path="/logout" element={<Logout />} />
+        <Route path="*" element={<Login />} />
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
-
-export default App;
