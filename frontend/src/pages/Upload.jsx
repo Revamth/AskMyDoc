@@ -1,29 +1,39 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import "./Upload.css";
 
 export default function Upload() {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+    setStatus("");
+    setError("");
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-
-    if (!file) return alert("Please select a PDF");
+    if (!file) {
+      setError("Please select a PDF");
+      return;
+    }
     const token = localStorage.getItem("token");
-    if (!token) return alert("You must be logged in to upload.");
+    if (!token) {
+      setError("You must be logged in to upload");
+      return;
+    }
 
     const formData = new FormData();
     formData.append("pdf", file);
 
     try {
       setStatus("⏳ Uploading...");
-      const res = await axios.post(
+      setError("");
+      await axios.post(
         `${import.meta.env.VITE_API_BASE}/pdf/upload`,
         formData,
         {
@@ -33,35 +43,31 @@ export default function Upload() {
           },
         }
       );
-
-      setStatus(`✅ Upload successful! PDF ID: ${res.data.pdfId}`);
+      setStatus("✅ Upload successful!");
       setFile(null);
-      setTimeout(() => {
-        setStatus("");
-        navigate("/ask");
-      }, 1000);
+      setTimeout(() => navigate("/ask"), 1000);
     } catch (err) {
-      console.error("Upload failed:", err);
-      alert("Upload failed: " + (err?.response?.data?.error || "Try again"));
-      setStatus("❌ Upload failed");
+      setError(err.response?.data?.error || "Upload failed");
+      setStatus("");
     }
   };
 
   return (
-    <div style={{ maxWidth: "500px", margin: "auto", textAlign: "center" }}>
+    <div className="upload-container">
       <h2>Upload a PDF</h2>
-      <form onSubmit={handleUpload}>
+      {error && <p className="auth-error">{error}</p>}
+      {status && <p className="status">{status}</p>}
+      <form onSubmit={handleUpload} className="upload-form">
         <input
           type="file"
           accept="application/pdf"
           onChange={handleFileChange}
-          value={file?.name ? undefined : ""}
-          style={{ marginBottom: "1rem" }}
+          className="file-input"
         />
-        <br />
-        <button type="submit">Upload</button>
+        <button type="submit" className="btn btn-primary">
+          Upload
+        </button>
       </form>
-      <p>{status}</p>
     </div>
   );
 }

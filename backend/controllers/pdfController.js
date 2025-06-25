@@ -2,65 +2,109 @@ const fs = require("fs");
 const path = require("path");
 const pdfParse = require("pdf-parse");
 const db = require("../db");
+const logger = require("../utils/logger");
+const { generateSummary } = require("../services/groqService");
+const sanitize = require("sanitize-html");
 
 exports.uploadPDF = async (req, res) => {
   try {
     const file = req.file;
-    console.log("🟡 Uploaded file:", file);
+    const userId = req.user.id;
 
-    if (!file || path.extname(file.originalname) !== ".pdf") {
-      console.log("❌ Invalid or missing file");
+    const user = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
+    if (!user) {
+      logger.warn(`Invalid user_id ${userId} attempted to upload PDF`);
+      return res
+        .status(403)
+        .json({ error: "User not found. Please log in again." });
+    }
+
+    if (!file || path.extname(file.originalname).toLowerCase() !== ".pdf") {
+      logger.warn(`Invalid file upload attempt by user ${userId}`);
       return res.status(400).json({ error: "Please upload a valid PDF" });
     }
 
     const filePath = file.path;
-    const filename = file.originalname;
+    const filename = sanitize(file.originalname);
 
-    console.log("📄 Reading file from:", filePath);
+    logger.info(`Processing PDF: ${filename} for user ${userId}`);
     const dataBuffer = fs.readFileSync(filePath);
-
-    console.log("🔍 Extracting text from PDF...");
     const pdfData = await pdfParse(dataBuffer);
-    console.log("✅ Text extracted");
-
     const text = pdfData.text;
 
-    console.log("💾 Inserting into DB...");
-    const info = db
-      .prepare(
-        `INSERT INTO documents (filename, path, content, user_id, upload_date)
-       VALUES (?, ?, ?, ?, ?)`
-      )
-      .run(filename, filePath, text, req.user.id, new Date().toISOString());
+    const summary = await generateSummary(text.slice(0, 4000));
+    if (!summary) {
+      logger.error(`Failed to generate summary for ${filename}`);
+      return res
+        .status(500)
+        .json({ error: "Failed to generate document summary" });
+    }
 
-    console.log("✅ Inserted with ID:", info.lastInsertRowid);
-
-    res.status(200).json({
-      message: "PDF uploaded successfully",
-      pdfId: info.lastInsertRowid,
-    });
+    db.transaction(() => {
+      const stmt = db.prepare(
+        `INSERT INTO documents (filename, path, content, summary, user_id, upload_date)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      const info = stmt.run(
+        filename,
+        filePath,
+        text,
+        summary,
+        userId,
+        new Date().toISOString()
+      );
+      logger.info(`PDF uploaded: ${filename}, ID: ${info.lastInsertRowid}`);
+      res.status(200).json({
+        message: "PDF uploaded successfully",
+        pdfId: info.lastInsertRowid,
+        summary,
+      });
+    })();
   } catch (err) {
-    console.error("❌ Upload error:", err);
+    logger.error(
+      `Upload error for user ${req.user?.id || "unknown"}: ${err.message}`
+    );
+    if (err.message.includes("FOREIGN KEY constraint failed")) {
+      return res
+        .status(403)
+        .json({ error: "Invalid user. Please log in again." });
+    }
+    if (err.message.includes("no column named")) {
+      return res
+        .status(500)
+        .json({ error: "Database schema outdated. Please contact support." });
+    }
     res.status(500).json({ error: "Error processing PDF" });
+  } finally {
+    if (req.file?.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err)
+          logger.error(
+            `Failed to delete file ${req.file.path}: ${err.message}`
+          );
+      });
+    }
   }
 };
 
 exports.getDocuments = (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`Fetching documents for user ${userId}`); // Add this
+    logger.info(`Fetching documents for user ${userId}`);
 
     const stmt = db.prepare(
-      "SELECT id, filename FROM documents WHERE user_id = ?"
+      "SELECT id, filename, summary FROM documents WHERE user_id = ? ORDER BY upload_date DESC"
     );
     const docs = stmt.all(userId);
 
-    console.log(`Found ${docs.length} documents:`); // Add this
-    console.log(docs); // Add this
-
+    logger.info(`Found ${docs.length} documents for user ${userId}`);
     res.json(docs);
   } catch (err) {
-    console.error("❌ Error fetching documents:", err);
+    logger.error(
+      `Error fetching documents for user ${req.user?.id || "unknown"}: ${
+        err.message
+      }`
+    );
     res.status(500).json({ error: "Failed to fetch documents" });
   }
 };

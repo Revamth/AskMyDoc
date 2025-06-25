@@ -3,6 +3,8 @@
 /backend/.env
 /backend/pdfqa.db
 /backend/uploads/
+/backend/combined.log
+/backend/error.log
 
 # ====== Frontend ======
 /frontend/node_modules

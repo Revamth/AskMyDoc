@@ -5,10 +5,13 @@ import Ask from "./pages/Ask";
 import Logout from "./components/Logout";
 import PrivateRoute from "./components/PrivateRoute";
 import Signup from "./pages/Signup";
+import NavBar from "./components/NavBar";
+import "./App.css";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <NavBar />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />

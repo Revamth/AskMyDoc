@@ -12,8 +12,15 @@ exports.signup = async (req, res) => {
     const stmt = db.prepare(
       "INSERT INTO users (username, password) VALUES (?, ?)"
     );
-    stmt.run(username, hashed);
-    res.status(201).json({ msg: "User created successfully" });
+    const result = stmt.run(username, hashed);
+
+    const token = jwt.sign(
+      { id: result.lastInsertRowid, username },
+      JWT_SECRET,
+      { expiresIn: "2h" }
+    );
+
+    res.status(201).json({ token });
   } catch (err) {
     res.status(400).json({ error: "Username already exists" });
   }

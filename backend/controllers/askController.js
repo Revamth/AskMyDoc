@@ -2,6 +2,8 @@ const db = require("../db");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 const dotenv = require("dotenv");
+const logger = require("../utils/logger");
+const sanitize = require("sanitize-html");
 
 dotenv.config();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -15,13 +17,12 @@ exports.askQuestion = async (req, res) => {
 
   try {
     const stmt = db.prepare(
-      "SELECT content FROM documents WHERE id = ? AND user_id = ?"
+      "SELECT content, summary FROM documents WHERE id = ? AND user_id = ?"
     );
-    console.log(`Looking for pdfId: ${pdfId}, userId: ${req.user.id}`);
     const doc = stmt.get(pdfId, req.user.id);
 
     if (!doc) {
-      console.log(
+      logger.warn(
         `Document not found for pdfId: ${pdfId}, userId: ${req.user.id}`
       );
       return res
@@ -29,14 +30,18 @@ exports.askQuestion = async (req, res) => {
         .json({ error: "PDF not found or unauthorized access" });
     }
 
+    const content = doc.content.slice(0, 6000);
     const prompt = `
-You are an AI assistant. Use the following PDF content to answer the user’s question.
+      You are an AI assistant. Use the following PDF content and summary to answer the user’s question.
 
-Content:
-${doc.content.slice(0, 4000)} 
+      Summary:
+      ${doc.summary || "No summary available"}
 
-Question:
-${question}
+      Content:
+      ${content}
+
+      Question:
+      ${sanitize(question)}
     `.trim();
 
     const response = await fetch(
@@ -62,19 +67,19 @@ ${question}
     );
 
     const data = await response.json();
-    console.log("🔥 Groq API Response:", JSON.stringify(data, null, 2));
 
-    if (!data.choices || !data.choices[0]) {
-      console.error("Groq Error:", data);
-      return res.status(500).json({ error: "Invalid response from Groq API" });
+    if (!data.choices?.[0]?.message?.content) {
+      logger.error(`Invalid Groq API response: ${JSON.stringify(data)}`);
+      return res.status(500).json({ error: "Failed to get answer from AI" });
     }
 
-    const answer = data.choices[0].message.content;
-    res.json({ answer });
+    res.json({ answer: data.choices[0].message.content });
   } catch (err) {
-    console.error("Error:", err);
+    logger.error(
+      `Error answering question for user ${req.user.id}: ${err.message}`
+    );
     res
       .status(500)
-      .json({ error: "Something went wrong while answering your question." });
+      .json({ error: "Something went wrong while answering your question" });
   }
 };

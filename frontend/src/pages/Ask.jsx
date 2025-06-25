@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import "./Ask.css";
 
 export default function Ask() {
   const [pdfList, setPdfList] = useState([]);
   const [pdfId, setPdfId] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem("token");
@@ -13,84 +15,73 @@ export default function Ask() {
   useEffect(() => {
     if (!token) return;
 
-    console.log("Fetching documents...");
     axios
-      .get("http://localhost:5000/api/pdf/docs", {
+      .get(`${import.meta.env.VITE_API_BASE}/pdf/docs`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-
-      .then((res) => {
-        console.log("Documents received:", res.data);
-        setPdfList(res.data);
-      })
-      .catch((err) => {
-        console.error(
-          "❌ Document fetch error:",
-          err?.response?.data || err.message
-        );
-        alert("❌ Failed to load documents");
-      });
+      .then((res) => setPdfList(res.data))
+      .catch((err) => setError("Failed to load documents", err));
   }, [token]);
 
-  const handleAsk = async () => {
+  const handleAsk = async (e) => {
+    e.preventDefault();
     if (!pdfId || !question.trim()) {
-      return alert("Please select a PDF and enter a question.");
+      setError("Please select a PDF and enter a question");
+      return;
     }
 
     try {
       setLoading(true);
+      setError("");
       setAnswer("");
       const res = await axios.post(
-        "http://localhost:5000/api/pdf/ask",
+        `${import.meta.env.VITE_API_BASE}/pdf/ask`,
         { pdfId, question },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setAnswer(res.data.answer);
     } catch (err) {
-      console.error("Ask failed:", err.response?.data || err.message);
-      setAnswer("❌ Failed to get answer from AI. Please try again.");
+      setError(err.response?.data?.error || "Failed to get answer from AI");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: "600px", margin: "auto" }}>
+    <div className="ask-container">
       <h2>Ask a Question</h2>
+      {error && <p className="auth-error">{error}</p>}
+      <form onSubmit={handleAsk} className="ask-form">
+        <label className="label">Select PDF:</label>
+        <select
+          value={pdfId}
+          onChange={(e) => setPdfId(e.target.value)}
+          className="select"
+        >
+          <option value="">-- Select a document --</option>
+          {pdfList.map((pdf) => (
+            <option key={pdf.id} value={pdf.id}>
+              {pdf.filename}
+            </option>
+          ))}
+        </select>
 
-      <label>Select PDF:</label>
-      <select
-        value={pdfId}
-        onChange={(e) => setPdfId(e.target.value)}
-        style={{ width: "100%", padding: "0.5rem" }}
-      >
-        <option value="">-- Select a document --</option>
-        {pdfList.map((pdf) => (
-          <option key={pdf.id} value={pdf.id}>
-            {pdf.filename}
-          </option>
-        ))}
-      </select>
+        <label className="label">Your Question:</label>
+        <textarea
+          rows="3"
+          placeholder="Ask something..."
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          className="textarea"
+        />
 
-      <label style={{ marginTop: "1rem", display: "block" }}>
-        Your Question:
-      </label>
-      <textarea
-        rows="3"
-        placeholder="Ask something..."
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        style={{ width: "100%", padding: "0.5rem", marginBottom: "1rem" }}
-      />
-
-      <button onClick={handleAsk} disabled={loading}>
-        {loading ? "⏳ Thinking..." : "Ask"}
-      </button>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? "⏳ Thinking..." : "Ask"}
+        </button>
+      </form>
 
       {answer && (
-        <div
-          style={{ marginTop: "1rem", background: "#f1f1f1", padding: "1rem" }}
-        >
+        <div className="answer-section">
           <h3>Answer:</h3>
           <p>{answer}</p>
         </div>
