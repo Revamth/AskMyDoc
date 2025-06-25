@@ -17,9 +17,13 @@ exports.askQuestion = async (req, res) => {
     const stmt = db.prepare(
       "SELECT content FROM documents WHERE id = ? AND user_id = ?"
     );
+    console.log(`Looking for pdfId: ${pdfId}, userId: ${req.user.id}`);
     const doc = stmt.get(pdfId, req.user.id);
 
     if (!doc) {
+      console.log(
+        `Document not found for pdfId: ${pdfId}, userId: ${req.user.id}`
+      );
       return res
         .status(404)
         .json({ error: "PDF not found or unauthorized access" });
@@ -58,6 +62,7 @@ ${question}
     );
 
     const data = await response.json();
+    console.log("🔥 Groq API Response:", JSON.stringify(data, null, 2));
 
     if (!data.choices || !data.choices[0]) {
       console.error("Groq Error:", data);

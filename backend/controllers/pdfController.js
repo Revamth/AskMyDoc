@@ -44,3 +44,23 @@ exports.uploadPDF = async (req, res) => {
     res.status(500).json({ error: "Error processing PDF" });
   }
 };
+
+exports.getDocuments = (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(`Fetching documents for user ${userId}`); // Add this
+
+    const stmt = db.prepare(
+      "SELECT id, filename FROM documents WHERE user_id = ?"
+    );
+    const docs = stmt.all(userId);
+
+    console.log(`Found ${docs.length} documents:`); // Add this
+    console.log(docs); // Add this
+
+    res.json(docs);
+  } catch (err) {
+    console.error("❌ Error fetching documents:", err);
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+};
