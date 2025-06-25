@@ -1,4 +1,4 @@
-const db = require("./db");
+const db = require("../db");
 
 try {
   const stmt = db.prepare("DELETE FROM users");
